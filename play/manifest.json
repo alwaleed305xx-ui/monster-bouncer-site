@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "Monster Bouncer — بودي قارد الوحوش",
+  "short_name": "Monster Bouncer",
+  "description": "Be the bouncer at the monsters' night party: check the poster, spot the fakes, swipe guests IN or OUT and build the house band. Daily night, no timers, no ads. بودي قارد حفلة الوحوش: شوف البوستر، اكشف المزيّفين، دخّل أو طرّد.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0b24",
+  "theme_color": "#1b1a4d",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["games", "entertainment"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

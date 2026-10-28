@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Monster Bouncer — بودي قارد الوحوش</title>
+  <meta name="description" content="Monster Bouncer (بودي قارد الوحوش): be the bouncer at the monsters' night party. Check the poster, spot the fakes, swipe guests IN or OUT and build the house band.">
+  <meta name="theme-color" content="#1b1a4d">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Monster Bouncer">
+  <meta name="application-name" content="Monster Bouncer">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon.png">
+  <!-- full-bleed square: iOS applies its own squircle mask and would show black corners behind a transparent icon -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- The game canvas is created by js/core/stage.js and appended here by js/main.js. -->
+  <div id="app"></div>
+
+  <!-- Boot splash (CSS-only: three monster heads peeking over the brass marquee sign with the MONSTER / BOUNCER lockup: the googly
+       eye as the O, the velvet rope on brass stanchions under it). The engine hides it once the first frame is ready with
+       document.getElementById('splash').classList.add('fade')  (animated)  or  .classList.add('hidden')  (instant). -->
+  <div id="splash" role="status" aria-live="polite" aria-label="Loading">
+    <div class="splash-logo" aria-hidden="true">
+      <span class="splash-glow"></span>
+      <span class="splash-mon splash-mon--l"><b></b><b></b></span>
+      <span class="splash-mon splash-mon--r"><b></b><b></b><b></b></span>
+      <span class="splash-mon"><b></b><b></b></span>
+      <span class="splash-sign"><span class="splash-word" dir="ltr" lang="en"><span class="splash-line splash-line--m">M<i class="splash-eye"></i>NSTER</span><span class="splash-line splash-line--b">BOUNCER</span><span class="splash-rope"></span></span></span>
+    </div>
+    <div class="splash-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+  </div>
+
+  <!-- 'Turn your phone' card: shown by a CSS media query (phone held sideways: landscape + coarse pointer + short viewport,
+       see css/app.css #rotate). engine.js watches the same query and suspends the game loop while it is up. -->
+  <div id="rotate" role="alert">
+    <div class="rot-art" aria-hidden="true">
+      <span class="rot-glow"></span>
+      <svg class="rot-arrow" viewBox="0 0 170 170" focusable="false">
+        <path class="rot-arrow__ink" d="M20 50 A76 76 0 0 1 150 50"/>
+        <path class="rot-arrow__line" d="M20 50 A76 76 0 0 1 150 50"/>
+        <path class="rot-arrow__head" d="M157 61 L158 41.5 L139 53 Z"/>
+      </svg>
+      <span class="rot-phone">
+        <span class="rot-screen"><span class="rot-spill"></span><span class="rot-mon"><b></b><b></b></span></span>
+        <span class="rot-speaker"></span>
+      </span>
+    </div>
+    <div class="rot-copy">
+      <p class="rot-title"><span class="rot-en" lang="en" dir="ltr">Turn your phone</span><span class="rot-ar" lang="ar" dir="rtl">لفّ جوالك</span></p>
+      <p class="rot-sub"><span class="rot-en" lang="en" dir="ltr">The party only plays upright</span><span class="rot-ar" lang="ar" dir="rtl">الحفلة تنلعب والجوال واقف</span></p>
+    </div>
+  </div>
+
+  <!-- Warms the bundled fonts up while the splash shows so the canvas can use them on its first frame. -->
+  <div class="font-warm" aria-hidden="true"><span class="font-warm__baloo">Aa</span><span class="font-warm__poppins">Aa</span><span class="font-warm__cairo">أب</span></div>
+
+  <noscript><div class="noscript">This game needs JavaScript.</div></noscript>
+
+  <script>
+    // Native app (Capacitor iOS): the bridge object window.Capacitor exists before any page script runs. There the page
+    // gets no pinch / double-tap zoom (Guideline 4.2; the web keeps whatever zoom the browser allows), a 'native' class,
+    // no service worker (below), and a failed boot also takes the native launch splash down so 'tap to retry' shows.
+    // js/native.js does the rest once the game runs.
+    (function () {
+      var native = false;
+      try { var C = window.Capacitor; native = !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e) { native = false; }
+      window.__native = native;
+      if (!native) return;
+      document.documentElement.className += ' native';
+      var vp = document.querySelector('meta[name="viewport"]');
+      if (vp && (vp.getAttribute('content') || '').indexOf('user-scalable') < 0) vp.setAttribute('content', vp.getAttribute('content') + ', maximum-scale=1, user-scalable=no');
+    })();
+
+    // Boot guard: runs before js/main.js is fetched. If main.js 404s or throws during boot the splash would otherwise
+    // animate forever; after a timeout (shortened by any script error) the dots become a "tap to retry" pill.
+    // main.js may also call window.__shell.fail() from its own catch. Dev pages do not auto-arm this.
+    (function () {
+      var WATCHDOG_MS = 12000;
+      var ERROR_MS = 2500;
+      var splash = document.getElementById('splash');
+      var timer = 0;
+      var deadline = Infinity;
+      var failed = false;
+
+      function booted() {
+        return !splash || !splash.isConnected || splash.classList.contains('fade') || splash.classList.contains('hidden');
+      }
+      function fail() {
+        if (failed || booted()) return;
+        failed = true;
+        if (window.__native) {
+          try { var P = window.Capacitor.Plugins, SS = P && P.SplashScreen; if (SS && SS.hide) { var r = SS.hide(); if (r && r.catch) r.catch(function () {}); } } catch (e) { /* no plugin */ }
+        }
+        splash.classList.add('failed');
+        splash.setAttribute('aria-label', 'Could not load');
+        var dots = splash.querySelector('.splash-dots');
+        if (dots) dots.classList.add('hidden');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'splash-retry';
+        var en = document.createElement('b');
+        en.textContent = 'Could not load — tap to retry';
+        var ar = document.createElement('span');
+        ar.lang = 'ar';
+        ar.dir = 'rtl';
+        ar.textContent = 'تعذّر التحميل — اضغط للمحاولة';
+        btn.appendChild(en);
+        btn.appendChild(ar);
+        btn.addEventListener('click', function () { location.reload(); });
+        splash.appendChild(btn);
+      }
+      function arm(ms) {
+        if (failed || booted()) return;
+        var at = Date.now() + ms;
+        if (at >= deadline) return;
+        deadline = at;
+        clearTimeout(timer);
+        timer = setTimeout(fail, ms);
+      }
+      window.addEventListener('error', function (e) {
+        var t = e && e.target;
+        if (t && t !== window && t.tagName !== 'SCRIPT') return;   // a missing image or stylesheet is not a boot failure
+        arm(ERROR_MS);
+      }, true);
+      window.addEventListener('unhandledrejection', function () { arm(ERROR_MS); });
+      arm(WATCHDOG_MS);
+      window.__shell = { fail: fail };
+    })();
+
+    // Service worker: only where it can run (https, or localhost during development); never inside the native app, whose
+    // files ship in the binary (capacitor://localhost would pass the localhost test). Dev pages never register it.
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      if (window.__native) {
+        try { navigator.serviceWorker.getRegistrations().then(function (rs) { for (var i = 0; i < rs.length; i++) rs[i].unregister(); }, function () {}); } catch (e) { /* none */ }
+        return;
+      }
+      var h = location.hostname;
+      var ok = location.protocol === 'https:' || h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+      if (!ok) return;
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () { /* offline support is optional */ });
+      });
+    })();
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
